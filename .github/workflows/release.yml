@@ -1,0 +1,67 @@
+name: Create Signal Desktop Release
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y squashfs-tools
+
+    - name: Download Signal Desktop
+      run: |
+        wget -O- https://updates.signal.org/desktop/apt/keys.asc | gpg --dearmor > signal-desktop-keyring.gpg
+        cat signal-desktop-keyring.gpg | sudo tee /usr/share/keyrings/signal-desktop-keyring.gpg > /dev/null
+        echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/signal-desktop-keyring.gpg] https://updates.signal.org/desktop/apt xenial main' | sudo tee /etc/apt/sources.list.d/signal-xenial.list
+        sudo apt update
+        mkdir deb
+        cd deb
+        apt download signal-desktop
+        release=$(ls | cut -d_ -f2)
+        ls | xargs -I% dpkg -x "%" ../signal-desktop
+        rm -rf ./*
+
+        apt download signal-desktop-beta
+        beta=$(ls | cut -d_ -f2)
+        ls | xargs -I% dpkg -x "%" ../signal-desktop
+        rm -rf ./*
+        cd ..
+
+    - name: Create AppImage
+      run: |
+        mksquashfs signal-desktop/ signal-desktop.squashfs -root-owned -noappend -b 1048576 -comp xz -Xdict-size 100% 
+        cat runtime >> signal-desktop.AppImage
+        cat signal-desktop.squashfs >> signal-desktop.AppImage
+        chmod a+x signal-desktop.AppImage
+
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ env.release }}-${{ env.beta }}
+        release_name: ${{ env.release }}-${{ env.beta }}
+        body: |
+          Signal Desktop AppImage for both release and beta versions.
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      id: upload-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./signal-desktop.AppImage
+        asset_name: signal-desktop-${{ env.release }}-${{ env.beta }}.AppImage
+        asset_content_type: application/octet-stream
+

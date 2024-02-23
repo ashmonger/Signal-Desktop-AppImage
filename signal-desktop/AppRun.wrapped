@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+export PATH="$(dirname $0)/opt/Signal Beta:$(dirname $0)/opt/Signal:${PATH}"
+export LD_LIBRARY_PATH="$(dirname $0)/opt/Signal Beta:$(dirname $0)/opt/Signal:${LD_LIBRARY_PATH}"
+
+if [ "$1" == "beta" ]; then
+    shift
+    exec signal-desktop-beta "$@"
+else
+    exec signal-desktop "$@"
+fi
